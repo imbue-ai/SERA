@@ -4,12 +4,13 @@ import subprocess
 import yaml
 
 from filelock import FileLock
+from omegaconf import OmegaConf
 from pathlib import Path
 from tqdm import tqdm
 from typing import List
 
 from sera.config_schema import DistillConfig, ModelConfig, SWEAgentWrapperConfig
-from sera.utils import ExperimentFolder
+from sera.utils import ExperimentFolder, load_yaml
 
 def get_dataset_shard(instances_fp, shard, total_shards):
     if shard > total_shards - 1 or shard < 0:
@@ -46,8 +47,6 @@ class DistillRunner:
         self.folder = folder
         self.args = args
         self.model = config.model
-        for k, v in self.config.args.items():
-            self.args[k] = v
         
         if config.shard >= config.total_shards:
             raise RuntimeError("Cannot have a shard index more than what the total shards allows")
@@ -198,14 +197,16 @@ def scrape_synthetic_prs(instance_fp: Path, traj_dir: Path, remove_duplicates: b
 
 def main(config: DistillConfig, folder: ExperimentFolder, stage: str, metadata_only: bool = False): # TODO: Add save configs to experiment fodler
     assert stage in ["stage_one", "stage_two"]
+    args = OmegaConf.to_container(config.args, resolve=True)
     if stage == "stage_one":
+        assert args.get("pipeline", False), "To run stage one of SVG, distill.args.pipeline should be True"
         instances_fp = folder.data_dir / "stage_one_instances.yaml" # TODO: Replace with a constant
         config_fp = folder.config_dir / f"{config.stage_one_config_name}.yaml"
-        args = {"pipeline": True}
     else:
         instances_fp = folder.data_dir / "stage_two_instances.yaml" # TODO: Replace with a constant
         config_fp = folder.config_dir / f"{config.stage_two_config_name}.yaml"
-        args = {}
+        # Set pipeline to False if starting from a later stage because the instance yamls are configured for normal SWE-agent
+        args["pipeline"] = False
     distiller = DistillRunner(config=config, folder=folder, instances_fp=instances_fp, cfg_fp=config_fp, args=args)
     if metadata_only:
         output_dir = distiller.output_dir

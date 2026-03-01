@@ -124,7 +124,7 @@ def transform_traj_xml(traj: dict, system_prompt: str, add_think: bool = False) 
         return actions
 
     new_traj = []
-    messages = traj["trajectory"][-1]["messages"][:-1]
+    messages = traj["history"] # traj["trajectory"][-1]["query"][:-1]
     for message in messages:
         role = message["role"] if message["role"] != "tool" else "user"
         if message["role"] == "assistant":
@@ -171,7 +171,7 @@ def transform_traj_hermes(traj: dict, system_prompt: str, add_think: bool = Fals
         response = ["<tool_response>", tool_response, "</tool_response>"]
         return "\n".join(response)
     new_traj = []
-    messages = traj["trajectory"][-1]["messages"][:-1]
+    messages = traj["history"] # traj["trajectory"][-1]["query"][:-1]
     for message in messages:
         # print(message)
         if message["role"] == "tool":
@@ -222,3 +222,6 @@ def transform_traj_hermes(traj: dict, system_prompt: str, add_think: bool = Fals
                 raise ValueError(f"Message type not recognized: {type(message)}")
         new_traj.append({"role": role, "content": content})
     return {"messages": new_traj}
+
+def transform_traj_raw(traj: dict, system_prompt: str, add_think: bool = False):
+    return {"messages": traj["history"]}

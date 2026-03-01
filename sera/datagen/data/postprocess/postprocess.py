@@ -14,22 +14,29 @@ from sera.datagen.data.postprocess.utils import (
     add_train_key,
     reformat_assistant_message,
     transform_traj_xml,
-    transform_traj_hermes
+    transform_traj_hermes,
+    transform_traj_raw
 )
-from sera.constants import HERMES_DEFAULT_SYSTEM_PROMPT, XML_DEFAULT_SYSTEM_PROMPT
+from sera.constants import (
+    HERMES_DEFAULT_SYSTEM_PROMPT, 
+    XML_DEFAULT_SYSTEM_PROMPT,
+    SWEAGENT_TOOLS
+)
 from sera.utils import dump_jsonl, ExperimentFolder
 
 MAP_TO_PARSER = {
     "xml": transform_traj_xml,
-    "hermes": transform_traj_hermes
+    "hermes": transform_traj_hermes,
+    "raw": transform_traj_raw
 }
 
 MAP_TO_SYSTEM_PROMPT = {
     "xml": XML_DEFAULT_SYSTEM_PROMPT,
-    "hermes": HERMES_DEFAULT_SYSTEM_PROMPT
+    "hermes": HERMES_DEFAULT_SYSTEM_PROMPT,
+    "raw": None
 }
 
-def get_raw_trajectories(traj_dir: Path, report: Dict, tool_call_format: str, add_think: bool, enforce_submit: bool):
+def get_raw_trajectories(traj_dir: Path, report: Dict, tool_call_format: str, add_think: bool, enforce_submit: bool, tool_json: bool):
     transform_traj = MAP_TO_PARSER[tool_call_format]
     system_prompt = MAP_TO_SYSTEM_PROMPT[tool_call_format]
     def _process_folder(folder):
@@ -37,7 +44,7 @@ def get_raw_trajectories(traj_dir: Path, report: Dict, tool_call_format: str, ad
             return None
 
         synth_path = os.path.join(traj_dir, folder, f"{folder}.synth")
-        if os.path.exists(synth_path): # Check if this is a folder from stage one or stage two
+        if os.path.exists(synth_path): # If this is from stage one, we confirm that the patch addressed the initial prompt
             try:
                 with open(synth_path, "r") as synth_f:
                     synth_json = json.load(synth_f)
@@ -64,6 +71,8 @@ def get_raw_trajectories(traj_dir: Path, report: Dict, tool_call_format: str, ad
             return None
 
         traj["instance_id"] = folder
+        if tool_json:
+            traj["tool_json"] = SWEAGENT_TOOLS
         return traj
 
     # Convert folders to data trajectories
@@ -106,7 +115,8 @@ def format_and_save(
                                             report=report, 
                                             tool_call_format=config.tool_call_format, 
                                             add_think=config.add_think, 
-                                            enforce_submit=config.enforce_submit)
+                                            enforce_submit=config.enforce_submit,
+                                            tool_json=config.include_tool_json)
     print(f"Found {len(dataset)} valid trajectories")
 
     if config.add_train_key:

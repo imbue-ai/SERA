@@ -119,7 +119,7 @@ class DistillConfig:
     # Sweagent config
     sweagent_wrapper_config: SWEAgentWrapperConfig = field(default_factory=SWEAgentWrapperConfig)
     # Extra args to pass into sweagent
-    args: Dict[str, Any] = field(default_factory=dict)
+    args: Dict[str, Any] = field(default_factory=lambda: {"pipeline": True, "pipeline_yaml": "sera/configs/pipeline/default_pipeline.yaml"})
     # Shard idx if sharding the data
     shard: int = 0
     # Number of total shards to shard data into
@@ -138,11 +138,13 @@ class EvalConfig:
 class PostprocessConfig: # Postprocessing
     """Configuration for data formatting."""
     # Tool call format. Choose hermes or xml.
-    tool_call_format: str = "hermes" # hermes | xml
+    tool_call_format: str = "hermes" # hermes | xml | raw
     # Whether to add <think> tags. Good for training Qwen3 models if the teacher does not use these tags (e.g. Claude).
     add_think: bool = False
     # Add train key to assistant messages (for axolotl), to make sure we only train on assistant messages
     add_train_key: bool = True
+    # Include OpenAI formatted JSON of tools as a field in each sample (helps debugging)
+    include_tool_json: bool = True
     # Some teacher models like GLM produce <think>TEXT</think>MORE TEXT. Change this to choose what part of this output is kept.
     reformat_assistant_message: Optional[str] = "keep_only_think" # empty | keep_only_think | keep_only_non_think
     # Only process trajectories that submit, ignoring ones that hit cost limits, context limits, etc.

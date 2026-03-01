@@ -41,6 +41,8 @@ distill:
     url: null # <--- FILL IN
   sweagent_wrapper_config:
     num_workers: 24
+  args:
+    pipeline_repo: sympy
 
 postprocess:
   tool_call_format: hermes

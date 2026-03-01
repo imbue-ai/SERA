@@ -26,21 +26,24 @@ from sera.datagen.train.filter_dataset_hf import filter_dataset
 # misc
 
 def dump_json(fp, data, overwrite=False):
-    if not overwrite:
-        assert not os.path.exists(fp), f"{fp} already exists"
+    if not overwrite and os.path.isfile(fp):
+        print(f"{fp} already exists")
+        return None
     with open(fp, "w") as f:
         json.dump(data, f, indent=4)
 
 def dump_jsonl(fp, data, overwrite=False):
-    if not overwrite:
-        assert not os.path.exists(fp), f"{fp} already exists"
+    if not overwrite and os.path.isfile(fp):
+        print(f"{fp} already exists")
+        return None
     with open(fp, "w") as f:
         for d in data:
             f.write(json.dumps(d) + "\n")
 
 def save_yaml(fp, data, overwrite=False):
-    if not overwrite:
-        assert not os.path.exists(fp), f"{fp} already exists"
+    if not overwrite and os.path.isfile(fp):
+        print(f"{fp} already exists")
+        return None
     with open(fp, "w") as f:
         yaml.safe_dump(data, f, indent=2, sort_keys=False)
 

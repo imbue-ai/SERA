@@ -168,6 +168,146 @@ This list can then be passed into a run as:
 distill.args.pipeline_repo=GENERATED_PATH
 ```
 
+# Configuration Reference
+
+All settings are defined as dataclasses in [sera/config_schema.py](sera/config_schema.py) and can be overridden via the command line using OmegaConf dot notation. For example:
+```
+python sera/main.py --config-name=specialization_django \
+    distill.model.name=openai/GLM-4.5-Air \
+    distill.model.url=http://HOST:PORT/v1 \
+    distill.sweagent_wrapper_config.num_workers=16 \
+    eval.compare_patch_threshold=0.5
+```
+
+## Top-Level Settings
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `stage` | str | `"pipeline"` | Which stage to run. Options: `pipeline` (all stages), `generate`, `distill_stage_one`, `distill_stage_two`, `eval`, `postprocess` |
+| `name` | str \| None | `None` | Name of the run. Creates a folder at `experiment_dir/name`. Auto-generated if not set. Used to resume interrupted runs. |
+| `experiment_dir` | str | `"./experiments"` | Where to save experiment data (trajectories, rollouts, outputs) |
+| `metadata_dir` | str | `"./metadata"` | Where to save parsed codebase graphs and other metadata |
+| `sweagent_cfg_dir` | str | `"./sera/configs/sweagent/"` | Directory containing full SWE-agent config YAML files |
+| `sweagent_cfgs` | list[str] | `["e2e", "qwen"]` | Which SWE-agent configs to load into the experiment |
+
+## Generate Settings (`generate.*`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `generate.fns_per_repo` | int | `5000` | Max number of functions to extract per repository |
+| `generate.insts_per_fn` | int | `1` | Number of times to process each function through the pipeline. Increase to generate more samples. |
+| `generate.repo_parent_dir` | str | `"./repos"` | Where to store cloned repositories |
+| `generate.docker.docker_org` | str \| None | `None` | Docker organization to push created images to. Makes containers persistent across reruns. |
+| `generate.docker.gh_mirror_org` | str \| None | `None` | GitHub mirror organization for personal repos (required for personal repo containerization) |
+
+### Personal Repos (`generate.personal_repos`)
+
+Defined as a list in YAML config files. Each entry supports:
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `org_name` | str | *required* | GitHub organization name |
+| `last_name` | str | *required* | GitHub repository name |
+| `commits` | list[str] \| None | `None` | Exact commits to create containers for. If not set, auto-scrapes `n_commits` commits. |
+| `n_commits` | int | `5` | Number of commits to auto-scrape if `commits` is not specified |
+| `lookback` | int | `365` | How many days to look back when auto-scraping commits |
+| `language` | str | `"python"` | Repository language. Only Python is supported currently. |
+| `install_cmds` | list[str] | `["python -m pip install -e ."]` | Commands to install the repository inside the container |
+| `test_cmd` | str \| None | `None` | Optional test command to verify installation |
+| `python_version` | str | `"3.10"` | Python version for the Docker container |
+| `skip_package_name` | list[str] | `[]` | Packages to skip installing (sidesteps rare dependency errors) |
+| `top_level_folder` | list[str] | `[]` | Main code folder(s) to parse (e.g. `src`). Auto-detected if empty. |
+| `overwrite_cg` | bool | `False` | Set `True` to regenerate codebase graphs instead of using cache |
+| `max_folder_depth` | int | `3` | How deep to parse into the codebase. Higher = more functions extracted. |
+
+### Existing Repos (`generate.existing_repos`)
+
+For repositories with pre-built Docker containers (SWE-Bench, SWE-Smith, etc.). Defined as a list in YAML config files.
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `org_name` | str | *required* | GitHub organization name |
+| `last_name` | str | *required* | GitHub repository name |
+| `base_commit` | str \| None | `None` | Commit the container is based on. Auto-set for `swebench`/`swesmith` sources. |
+| `instance_id` | str \| None | `None` | SWE-Bench instance ID (e.g. `django__django-7530`). Used to auto-set `base_commit`. |
+| `source` | str \| None | `None` | Container source: `"swebench"`, `"swesmith"`, or leave empty for custom |
+| `image_name` | str \| None | `None` | Custom Docker image name (for repos that are not from SWE-Bench or SWE-Smith) |
+| `top_level_folder` | list[str] | `[]` | Main code folder(s) to parse. Auto-detected if empty. |
+| `overwrite_cg` | bool | `False` | Set `True` to regenerate codebase graphs instead of using cache |
+| `max_folder_depth` | int | `3` | How deep to parse into the codebase. Higher = more functions extracted. |
+
+## Distill Settings (`distill.*`)
+
+### Model (`distill.model.*`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `distill.model.name` | str | `""` | Model identifier. Use `openai/` prefix for OpenAI-compatible servers (e.g. `openai/GLM-4.5-Air`), `anthropic/` prefix for Anthropic API (e.g. `anthropic/claude-sonnet-4-20250514`). |
+| `distill.model.url` | str \| None | `""` | API endpoint URL (e.g. `http://HOST:PORT/v1`). Leave empty/null for official OpenAI or Anthropic APIs. |
+
+### SWE-Agent Wrapper (`distill.sweagent_wrapper_config.*`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `distill.sweagent_wrapper_config.num_workers` | int | `32` | Number of concurrent rollouts |
+| `distill.sweagent_wrapper_config.per_instance_call_limit` | int | `115` | Max number of rollout steps per instance |
+| `distill.sweagent_wrapper_config.per_instance_cost_limit` | float | `0.0` | Max cost per rollout. Set to `0.0` for local models, `> 0.0` for API models. |
+| `distill.sweagent_wrapper_config.total_cost_limit` | float | `0.0` | Max total cost across all rollouts |
+| `distill.sweagent_wrapper_config.temperature` | float | `0.6` | Model sampling temperature |
+
+### Sharding & Stage Configs
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `distill.shard` | int | `0` | Current shard index (0-indexed) for parallel multi-server runs |
+| `distill.total_shards` | int | `1` | Total number of shards to split the data into |
+| `distill.stage_one_config_name` | str | `"e2e"` | SWE-agent config name for stage 1 rollouts. Must be in `sweagent_cfgs`. |
+| `distill.stage_two_config_name` | str | `"qwen"` | SWE-agent config name for stage 2 rollouts. Must be in `sweagent_cfgs`. |
+| `distill.args` | dict | `{"pipeline": True, "pipeline_yaml": "sera/configs/pipeline/default_pipeline.yaml"}` | Extra args passed to SWE-agent. Use `distill.args.pipeline_repo=PATH` to provide custom PR issues. |
+
+## Eval Settings (`eval.*`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `eval.compare_patch_threshold` | float | `1` | Verification threshold. `1` = hard verification (exact patch match), `0 < r < 1` = soft verification, `0` = no verification. |
+
+## Postprocess Settings (`postprocess.*`)
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `postprocess.tool_call_format` | str | `"hermes"` | Tool call format in output data. Options: `hermes`, `xml`, `raw` |
+| `postprocess.add_think` | bool | `False` | Add `<think>` tags to output. Useful for training Qwen3 models when the teacher doesn't produce think tokens (e.g. Claude). |
+| `postprocess.add_train_key` | bool | `True` | Add train key to assistant messages for axolotl, ensuring only assistant messages are trained on |
+| `postprocess.include_tool_json` | bool | `True` | Include OpenAI-formatted tool JSON as a field in each sample (helps debugging) |
+| `postprocess.reformat_assistant_message` | str \| None | `"keep_only_think"` | How to handle multi-part assistant messages (e.g. `<think>TEXT</think>MORE TEXT`). Options: `""` (keep all), `"keep_only_think"`, `"keep_only_non_think"` |
+| `postprocess.enforce_submit` | bool | `True` | Only process trajectories that successfully submitted, filtering out ones that hit cost/context limits |
+
+## Example: All Settings on CLI
+
+```
+python sera/main.py \
+    --config-name=specialization_django \
+    stage=pipeline \
+    name=my_experiment \
+    experiment_dir=./experiments \
+    metadata_dir=./metadata \
+    generate.fns_per_repo=5000 \
+    generate.insts_per_fn=1 \
+    generate.docker.docker_org=my-docker-org \
+    generate.docker.gh_mirror_org=my-gh-mirrors \
+    distill.model.name=openai/GLM-4.5-Air \
+    distill.model.url=http://localhost:24444/v1 \
+    distill.sweagent_wrapper_config.num_workers=24 \
+    distill.sweagent_wrapper_config.per_instance_cost_limit=5.0 \
+    distill.sweagent_wrapper_config.temperature=0.6 \
+    distill.shard=0 \
+    distill.total_shards=1 \
+    eval.compare_patch_threshold=0.5 \
+    postprocess.tool_call_format=hermes \
+    postprocess.add_think=false \
+    postprocess.enforce_submit=true
+```
+
 # Training
 
 See the README.md in [sera/datagen/train](sera/datagen/train).
