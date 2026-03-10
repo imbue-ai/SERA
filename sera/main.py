@@ -2,9 +2,12 @@ import hydra
 import logging
 import os
 
+from dotenv import load_dotenv
 from hydra.core.config_store import ConfigStore
 from omegaconf import DictConfig, OmegaConf
 from pathlib import Path
+
+load_dotenv()
 
 from sera.config_schema import (
     SeraConfig, 

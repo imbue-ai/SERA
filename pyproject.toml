@@ -11,8 +11,13 @@ dependencies = [
   "hydra-core==1.4.0.dev1",
   "omegaconf>=2.4.0.dev4",
   "anthropic==0.76.0",
-  "networkx==3.6.1"
+  "networkx==3.6.1",
+  "python-dotenv>=1.0.0",
 ]
 
 [tool.setuptools]
 packages = ["sera"]
+
+[tool.uv]
+# hydra-core and omegaconf use dev pre-release versions
+prerelease = "allow"
