@@ -36,7 +36,7 @@ distill:
     name: openai/GLM-4.5-Air
     url: null # <--- FILL IN
   sweagent_wrapper_config:
-    num_workers: 24
+    num_workers: 64
   args:
     pipeline_repo: pylint
 

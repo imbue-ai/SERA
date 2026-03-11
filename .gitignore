@@ -227,3 +227,4 @@ website/frontend/build
 *.disas.json
 
 uv.lock
+wandb/

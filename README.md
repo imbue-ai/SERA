@@ -23,6 +23,14 @@ conda activate sera
 pip install -e . -e modules/code2flow -e modules/SERA-SWE-Agent -e modules/SERA-mini-swe-agent
 ```
 
+With uv:
+```
+git clone --recurse-submodules https://github.com/allenai/SERA.git
+cd SERA
+uv sync
+uv pip install -e modules/code2flow -e modules/SERA-SWE-Agent -e modules/SERA-mini-swe-agent
+```
+
 # Generation
 
 [The full configuration reference](#full-configuration-reference) expands on the examples below.
@@ -52,6 +60,22 @@ We release several examples showing how to reproduce our experiments or run your
 ```
 python sera/main.py \
     --config-name=specialization_django \
+    distill.model.name=openai/GLM-4.5-Air \
+    distill.model.url=URL
+```
+
+Additional specialization configs are provided for other SWE-Bench and SWE-Smith repositories:
+
+| Config | Repository | Source |
+|--------|-----------|--------|
+| `specialization_flask` | pallets/flask | SWE-Bench |
+| `specialization_pylint` | pylint-dev/pylint | SWE-Bench |
+| `specialization_sqlglot` | tobymao/sqlglot | SWE-Smith |
+| `specialization_starlette` | encode/starlette | SWE-Smith |
+
+```
+python sera/main.py \
+    --config-name=specialization_flask \
     distill.model.name=openai/GLM-4.5-Air \
     distill.model.url=URL
 ```
@@ -113,6 +137,32 @@ python sera/main.py \
     distill.stage_two_config_name=mini_e2e \
     name=test_mini_swe_agent
 ```
+
+### 5. Running with Modal (Apple Silicon / Cloud)
+
+On Apple Silicon, the x86_64 Linux Docker images used by SWE-agent won't run locally. `modal_run.py` solves this by running the SWE-agent container environments as [Modal](https://modal.com/) Sandboxes in the cloud while everything else (generate, eval, postprocess, LLM API calls) runs locally.
+
+```
+pip install modal   # or: uv pip install modal
+modal token new     # authenticate once
+```
+
+Then use `modal_run.py` as a drop-in replacement for `sera/main.py`:
+```
+python modal_run.py \
+    --config-name=specialization_django \
+    distill.model.name=openai/GLM-4.5-Air \
+    distill.model.url=URL \
+    name=test_modal
+```
+
+Modal-specific settings can be tuned via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODAL_RUNTIME_TIMEOUT` | `300` | Per-sandbox runtime timeout (seconds) |
+| `MODAL_DEPLOYMENT_TIMEOUT` | `3600` | Overall deployment timeout (seconds) |
+| `MODAL_STARTUP_TIMEOUT` | `180` | Sandbox startup timeout (seconds) |
 
 ## Multiple Servers
 

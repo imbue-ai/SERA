@@ -85,9 +85,14 @@ experiments/<name>/
 
 Training configs and scripts are in `sera/datagen/train/`. Uses axolotl (primary), unsloth, or llamafactory. After axolotl training, run `convert_axolotl_checkpoint.py` to fix weight name prefixes for vLLM/sgLang compatibility.
 
+## Tooling
+
+- **Python**: Always use `uv run` to execute Python commands (e.g., `uv run python script.py`, `uv run pytest`)
+
 ## Environment Variables
 
 - `ANTHROPIC_API_KEY` — Required for Anthropic model configs
+- `WANDB_API_KEY` — Weights & Biases logging (used by Modal training)
 - Standard OpenAI env vars for local vLLM/sglang servers
 
 ## Sharding for Scale
