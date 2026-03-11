@@ -53,6 +53,8 @@ warmup_ratio: 0.1875 # We set this to maintain 48 step warmups, so this will cha
 evals_per_epoch: 0
 # save_steps: 256
 save_strategy: epoch
+save_total_limit: 1
+save_only_model: true
 
 weight_decay: 0.01
 special_tokens:

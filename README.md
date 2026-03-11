@@ -383,6 +383,215 @@ python sera/main.py \
 
 See the README.md in [sera/datagen/train](sera/datagen/train).
 
+# SWE-bench Evaluation
+
+The `eval/` directory contains a standalone SWE-bench evaluation harness using mini-swe-agent + swe-rex. This is separate from the pipeline's stage 4 eval (`sera/datagen/data/eval/`) which does patch comparison for training data.
+
+## Setup
+
+Requires Python 3.14+, [uv](https://docs.astral.sh/uv/), and a [Modal](https://modal.com/) account.
+
+```bash
+uv sync --extra eval
+modal setup  # authenticate with Modal (one-time)
+```
+
+Environment variables are loaded from the root `.env` file (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GITHUB_TOKEN`).
+
+## Deploy vLLM
+
+Deploy a vLLM server on Modal (H100):
+
+```bash
+cd eval
+uv run modal deploy serve_vllm.py
+```
+
+Configure via env vars before deploying:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VLLM_MODEL` | `Qwen/Qwen3.5-9B` | HuggingFace model ID or `/models/...` path on `sera-models` volume |
+| `VLLM_SERVED_NAME` | Same as `VLLM_MODEL` | Name the model is served as |
+| `VLLM_APP_NAME` | `swebench-vllm` | Modal app name (use unique names to run multiple servers) |
+| `VLLM_MODEL_REVISION` | `main` | HuggingFace model revision |
+
+### Deploying a Fine-Tuned Model
+
+After training with `modal_train.py`, the converted checkpoint is saved to the `sera-models` Modal volume at `/{run_name}/converted/`. The vLLM server mounts this volume at `/models`, so you reference the model by its volume path.
+
+Each fine-tuned model needs its own `VLLM_APP_NAME` to avoid overwriting the base model deployment. The app name determines the endpoint URL: `https://imbue--{APP_NAME}-serve.modal.run/v1`.
+
+```bash
+# Deploy a fine-tuned flask-specialist model
+cd eval
+VLLM_MODEL=/models/flask-specialist/converted \
+VLLM_SERVED_NAME=flask-specialist \
+VLLM_APP_NAME=swebench-vllm-ft \
+uv run modal deploy serve_vllm.py
+# Endpoint: https://imbue--swebench-vllm-ft-serve.modal.run/v1
+
+# Verify it's running
+curl https://imbue--swebench-vllm-ft-serve.modal.run/v1/models
+```
+
+You can run base and fine-tuned servers side-by-side since they have different app names:
+
+```bash
+# Base model (default app name)
+cd eval && uv run modal deploy serve_vllm.py
+# → https://imbue--swebench-vllm-serve.modal.run/v1
+
+# Fine-tuned model (custom app name)
+cd eval
+VLLM_MODEL=/models/flask-specialist/converted \
+VLLM_SERVED_NAME=flask-specialist \
+VLLM_APP_NAME=swebench-vllm-ft \
+uv run modal deploy serve_vllm.py
+# → https://imbue--swebench-vllm-ft-serve.modal.run/v1
+```
+
+To see what models are available on the volume:
+
+```bash
+uv run modal volume ls sera-models
+```
+
+## Run Evaluation
+
+```bash
+cd eval
+bash run_eval.sh [flags]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--config FILE` | `swebench_vllm.yaml` | YAML config file |
+| `--repos FILTER:NAME,...` | `pallets__flask:flask` | Comma-separated repo filters |
+| `--slice SLICE` | `0:5` | Instance slice (e.g. `0:10`). Use `""` for all |
+| `--workers N` | `1` | Parallel workers |
+| `--output DIR` | `results` | Output directory |
+| `--vllm-url URL` | *(from config)* | Override vLLM endpoint URL |
+| `--model-name NAME` | *(from config)* | Override served model name |
+
+### Examples
+
+```bash
+# All pylint instances with 8 workers (base model, default vLLM endpoint)
+bash run_eval.sh --repos "pylint-dev__pylint:pylint" --slice "" --workers 8
+
+# Multiple repos
+bash run_eval.sh \
+  --repos "pylint-dev__pylint:pylint,psf__requests:requests" \
+  --slice "" \
+  --workers 8
+```
+
+### Evaluating a Fine-Tuned Model
+
+Use `--vllm-url` and `--model-name` to point at a fine-tuned deployment. The `--model-name` must match the `VLLM_SERVED_NAME` used when deploying, and the `--vllm-url` must match the endpoint from `VLLM_APP_NAME`.
+
+```bash
+# Eval flask-specialist on all flask instances
+bash run_eval.sh \
+  --repos "pallets__flask:flask" \
+  --slice "" \
+  --workers 1 \
+  --vllm-url "https://imbue--swebench-vllm-ft-serve.modal.run/v1" \
+  --model-name "flask-specialist" \
+  --output results/flask_ft
+
+# Eval flask-specialist on django (cross-repo generalization)
+bash run_eval.sh \
+  --repos "django__django:django" \
+  --slice 0:10 \
+  --workers 4 \
+  --vllm-url "https://imbue--swebench-vllm-ft-serve.modal.run/v1" \
+  --model-name "flask-specialist" \
+  --output results/django_ft
+```
+
+### End-to-End: Train → Deploy → Eval
+
+```bash
+# 1. Train (produces sera-models:/flask-specialist/converted/)
+uv run python modal_train.py \
+  --dataset experiments/gemini_flask/data/stage_two_instances_*.jsonl \
+  --run-name flask-specialist
+
+# 2. Deploy fine-tuned model on Modal
+cd eval
+VLLM_MODEL=/models/flask-specialist/converted \
+VLLM_SERVED_NAME=flask-specialist \
+VLLM_APP_NAME=swebench-vllm-ft \
+uv run modal deploy serve_vllm.py
+
+# 3. Eval on SWE-bench
+bash run_eval.sh \
+  --repos "pallets__flask:flask" \
+  --slice "" \
+  --workers 1 \
+  --vllm-url "https://imbue--swebench-vllm-ft-serve.modal.run/v1" \
+  --model-name "flask-specialist" \
+  --output results/flask_ft
+```
+
+### Interpreting Results
+
+Results are saved to `{output}/{name}/` (e.g. `results/flask_ft/flask/`):
+
+```
+results/flask_ft/flask/
+  preds.json                          # Patches keyed by instance ID
+  minisweagent.log                    # Full run log
+  exit_statuses_<timestamp>.yaml      # Per-instance exit status summary
+  pallets__flask-5014/                # Per-instance trajectory
+    pallets__flask-5014.traj.json     # Full agent trace (messages, tool calls, costs)
+```
+
+**`exit_statuses_*.yaml`** — Quick check for how the run went. Instances are grouped by exit status:
+
+- `Submitted` — Agent produced a patch (doesn't mean it's correct, just that it completed)
+- `NotFoundError` / `APIError` — Model endpoint issue (wrong URL, model not deployed, etc.)
+- `CostLimitExceeded` / `StepLimitExceeded` — Agent hit a safety limit before submitting
+
+**`preds.json`** — The main output. Each entry has an `instance_id` and a `model_patch` (the git diff the agent produced). An empty `model_patch` means the agent failed to submit. This file is the input to SWE-bench's official grading harness.
+
+**Scoring with SWE-bench** — To get pass/fail scores, run the patches through [SWE-bench's evaluation](https://github.com/princeton-nlp/SWE-bench):
+
+```bash
+uv pip install swebench
+uv run python -m swebench.harness.run_evaluation \
+      --predictions_path results/pylint_base/pylint/preds.json \
+      --dataset_name princeton-nlp/SWE-bench_Verified \
+      --run_id pylint_base
+```
+
+This applies each patch to the corresponding repo, runs the test suite, and reports how many instances pass. The key metric is **% resolved** — instances where the patch makes all relevant tests pass.
+
+**Trajectory files** (`*.traj.json`) — Contain the full agent conversation: every message, tool call, command output, and cost/call statistics. Useful for debugging why an agent failed or understanding its problem-solving approach.
+
+**Re-runs** — Existing instances in the output directory are automatically skipped. Delete the output directory or use a new `--output` path to re-run.
+
+### Available Repos
+
+All 500 instances across 12 repositories in SWE-bench Verified:
+
+| Filter | Instances |
+|--------|-----------|
+| `django__django:django` | 231 |
+| `sympy__sympy:sympy` | 75 |
+| `sphinx-doc__sphinx:sphinx` | 44 |
+| `matplotlib__matplotlib:matplotlib` | 34 |
+| `scikit-learn__scikit-learn:sklearn` | 32 |
+| `astropy__astropy:astropy` | 22 |
+| `pydata__xarray:xarray` | 22 |
+| `pytest-dev__pytest:pytest` | 19 |
+| `pylint-dev__pylint:pylint` | 10 |
+| `psf__requests:requests` | 8 |
+| `mwaskom__seaborn:seaborn` | 2 |
+| `pallets__flask:flask` | 1 |
+
 # Citation
 ```
 @misc{shen2026sera,

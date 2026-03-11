@@ -175,6 +175,8 @@ def build_axolotl_config(
         "warmup_ratio": 0.1875,
         "evals_per_epoch": 0,
         "save_strategy": "epoch",
+        "save_total_limit": 1,
+        "save_only_model": True,
         "weight_decay": 0.01,
     }
 

@@ -103,3 +103,35 @@ python sera/main.py --config-name=swesmith_scaling \
     distill.shard=0 distill.total_shards=4 \
     distill.model.url=URL_1
 ```
+
+## SWE-bench Evaluation (eval/)
+
+**Not to be confused with pipeline stage 4 eval** (`sera/datagen/data/eval/`) which does patch comparison for training data. The `eval/` directory is a standalone SWE-bench evaluation harness using mini-swe-agent + swe-rex.
+
+### Key files
+
+- `eval/run_eval.sh` — Main entry point, runs mini-swe-agent against SWE-bench Verified instances
+- `eval/serve_vllm.py` — Modal app deploying vLLM as a persistent web endpoint
+- `eval/swebench_vllm.yaml` — Config for self-hosted vLLM (Modal sandboxes)
+- `eval/swebench_qwen.yaml` — Config for OpenRouter Qwen (local Docker)
+- `eval/swebench_qwen_modal.yaml` — Config for OpenRouter Qwen (Modal sandboxes)
+
+### Running
+
+```bash
+# Install eval dependencies (requires Python 3.14+)
+uv sync --extra eval
+modal setup
+
+# Deploy vLLM on Modal
+cd eval && uv run modal deploy serve_vllm.py
+
+# Run evaluation
+cd eval && bash run_eval.sh --repos "pallets__flask:flask" --slice 0:1 --workers 1
+```
+
+### Environment Variables
+
+- `OPENAI_API_KEY` — Used as OpenRouter key (mapped to `OPENROUTER_API_KEY` at runtime)
+- `ANTHROPIC_API_KEY` — For Anthropic models
+- `VLLM_MODEL`, `VLLM_SERVED_NAME`, `VLLM_APP_NAME` — Set before `modal deploy` to configure vLLM
