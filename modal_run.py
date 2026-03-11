@@ -61,11 +61,18 @@ def patch_distill_runner():
         f" --instances.deployment.deployment_timeout {deployment_timeout}"
     )
 
+    # Tell SWE-agent to read the API key from env var instead of the
+    # config's hardcoded "not-needed" placeholder. The "$OPENAI_API_KEY"
+    # syntax is handled by SWE-agent's get_api_keys() method.
+    api_key_flag = ""
+    if os.environ.get("OPENAI_API_KEY"):
+        api_key_flag = " --agent.model.api_key $OPENAI_API_KEY"
+
     class ModalDistillRunner(OriginalDistillRunner):
 
         def _build_sweagent_cmd(self, *args, **kwargs):
             cmd = super()._build_sweagent_cmd(*args, **kwargs)
-            return cmd + modal_flags
+            return cmd + modal_flags + api_key_flag
 
         def _build_mini_swe_agent_cmd(self, *args, **kwargs):
             cmd = super()._build_mini_swe_agent_cmd(*args, **kwargs)

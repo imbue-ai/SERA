@@ -1,0 +1,50 @@
+# USAGE: python sera/main.py --config-name specialization_pylint stage=pipeline name=test
+
+defaults:
+  - sera
+  - _self_
+
+name: specialize_pylint
+
+generate:
+  fns_per_repo: 200
+  insts_per_fn: 1
+  existing_repos:
+    - org_name: pylint-dev
+      last_name: pylint
+      source: swebench
+      instance_id: pylint-dev__pylint-4551
+    - org_name: pylint-dev
+      last_name: pylint
+      source: swebench
+      instance_id: pylint-dev__pylint-4970
+    - org_name: pylint-dev
+      last_name: pylint
+      source: swebench
+      instance_id: pylint-dev__pylint-6528
+    - org_name: pylint-dev
+      last_name: pylint
+      source: swebench
+      instance_id: pylint-dev__pylint-7080
+    - org_name: pylint-dev
+      last_name: pylint
+      source: swebench
+      instance_id: pylint-dev__pylint-8898
+
+distill:
+  model:
+    name: openai/GLM-4.5-Air
+    url: null # <--- FILL IN
+  sweagent_wrapper_config:
+    num_workers: 24
+  args:
+    pipeline_repo: pylint
+
+postprocess:
+  tool_call_format: hermes
+  add_think: false # Set to true if using anthropic
+  add_train_key: true
+  enforce_submit: true
+
+eval:
+  compare_patch_threshold: 0.5

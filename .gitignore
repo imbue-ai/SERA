@@ -225,3 +225,5 @@ website/frontend/build
 # Disasm / Decomp output
 *.decomp.json
 *.disas.json
+
+uv.lock

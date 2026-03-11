@@ -125,6 +125,9 @@ class NoBugDataset(SyntheticDataset):
     def process_repo(self, repo: RepositoryInstance):
         repo_instances = []
         n_fn_processed = 0
+        if repo.call_graph is None:
+            print(f"Skipping {repo.get_full_name()}: call graph is None (setup likely failed)")
+            return repo_instances
         call_graph_nodes = list(set(repo.call_graph)) # Shuffle nodes since its not actually unordered
         random.shuffle(call_graph_nodes)
         print("Total Functions:", len(call_graph_nodes))

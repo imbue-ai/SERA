@@ -149,7 +149,7 @@ generate:
     last_name: python-dotenv
     source: swesmith
   - org_name: pndurette
-    last_name: gtts
+    last_name: gTTS
     source: swesmith
   - org_name: PyCQA
     last_name: flake8

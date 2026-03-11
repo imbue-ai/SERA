@@ -161,7 +161,10 @@ class ExistingRepository(Repository):
         repo_instance = RepositoryInstance(image_name=self.image_name, base_commit=self.base_commit, parent=self)
         try:
             repo_instance.setup(docker_org="", gh_mirror_org="", metadata_dir=metadata_dir, max_folder_depth=max_folder_depth)
-            self.instances.append(repo_instance)
+            if repo_instance.call_graph is not None:
+                self.instances.append(repo_instance)
+            else:
+                print(f"Skipping {repo_instance.get_full_name()}: call graph generation failed")
         except Exception as e:
             print(e)
 

@@ -1,0 +1,33 @@
+# USAGE: python sera/main.py --config-name specialization_sqlglot stage=pipeline name=test
+
+defaults:
+  - sera
+  - _self_
+
+name: specialize_sqlglot
+
+generate:
+  fns_per_repo: 5000
+  insts_per_fn: 1
+  existing_repos:
+    - org_name: tobymao
+      last_name: sqlglot
+      source: swesmith
+
+distill:
+  model:
+    name: openai/GLM-4.5-Air
+    url: null # <--- FILL IN
+  sweagent_wrapper_config:
+    num_workers: 24
+  args:
+    pipeline_repo: sqlglot
+
+postprocess:
+  tool_call_format: hermes
+  add_think: false # Set to true if using anthropic
+  add_train_key: true
+  enforce_submit: true
+
+eval:
+  compare_patch_threshold: 0.5

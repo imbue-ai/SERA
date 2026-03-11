@@ -1,0 +1,34 @@
+# USAGE: python sera/main.py --config-name specialization_flask stage=pipeline name=test
+
+defaults:
+  - sera
+  - _self_
+
+name: specialize_flask
+
+generate:
+  fns_per_repo: 200
+  insts_per_fn: 1
+  existing_repos:
+    - org_name: pallets
+      last_name: flask
+      source: swebench
+      instance_id: pallets__flask-5014
+
+distill:
+  model:
+    name: openai/GLM-4.5-Air
+    url: null # <--- FILL IN
+  sweagent_wrapper_config:
+    num_workers: 24
+  args:
+    pipeline_repo: flask
+
+postprocess:
+  tool_call_format: hermes
+  add_think: false # Set to true if using anthropic
+  add_train_key: true
+  enforce_submit: true
+
+eval:
+  compare_patch_threshold: 0.5
