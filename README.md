@@ -10,6 +10,103 @@ We support:
 - Data generation using open or closed source models
 - SWE-agent and mini-swe-agent frameworks
 
+# End-to-End Quickstart: Pylint Specialist
+
+This walkthrough generates a dataset from pylint, trains a specialist model on Modal, and evaluates it on SWE-bench Verified — all using `uv` and Modal.
+
+### Prerequisites
+
+- [uv](https://docs.astral.sh/uv/) installed
+- A [Modal](https://modal.com/) account (`modal setup` to authenticate)
+- run `mv .env.example .env` and fill out `.env`
+- Docker running locally (or use `modal_run.py` to skip local Docker)
+
+## Quick Start For the PyLint repo
+
+### 1. Install
+
+```bash
+git clone --recurse-submodules https://github.com/allenai/SERA.git
+cd SERA
+uv sync
+uv pip install -e modules/code2flow -e modules/SERA-SWE-Agent -e modules/SERA-mini-swe-agent
+# setup modal as well!
+modal token set *** -profile=<profile_name>
+modal profile activate <profile_name>
+```
+
+### 2. Generate Training Data
+
+Run the full pipeline on pylint using Claude as the teacher model. This extracts functions from 5 pylint SWE-bench containers, runs agent rollouts to create synthetic bug-introduction and bug-fixing tasks, evaluates patches, and formats trajectories into training data.
+
+```bash
+uv run python modal_run.py \
+  --config-name=specialization_pylint.yaml \
+  distill.model.name=openai/google/gemini-3-flash-preview \
+  distill.model.url=https://openrouter.ai/api/v1 \
+  name=gemini_pylint
+```
+
+Training data is written to `experiments/pylint-specialist/data/`.
+
+### 3. Train on Modal
+
+Fine-tune Qwen3.5-9B on the generated trajectories using Modal H200s:
+
+```bash
+# ls experiments/pylint-specialist/data/ to get the .jsonl file (you need the stage_two_instances_ one)
+uv run python modal_train.py \
+    --dataset experiments/pylint-specialist/data/stage_two_instances_{result}.jsonl \
+    --run-name pylint-specialist --num-gpus 2
+```
+
+The converted checkpoint is saved to the `sera-models` Modal volume at `/pylint-specialist/converted/`.
+
+### 4. Deploy the Fine-Tuned Model
+
+Deploy a vLLM server on Modal serving the trained model:
+
+```bash
+cd eval
+VLLM_MODEL=/models/pylint-specialist/converted \
+VLLM_SERVED_NAME=pylint-specialist \
+VLLM_APP_NAME=swebench-vllm-pylint \
+uv run modal deploy serve_vllm.py
+```
+
+Verify it's running:
+
+```bash
+curl https://imbue--swebench-vllm-pylint-serve.modal.run/v1/models
+```
+
+### 5. Evaluate on SWE-bench Verified
+
+```bash
+# Install eval dependencies (requires Python 3.14+)
+uv sync --extra eval
+
+# Run against all 10 pylint instances in SWE-bench Verified
+cd eval
+bash run_eval.sh \
+    --repos "pylint-dev__pylint:pylint" \
+    --slice "" \
+    --workers 4 \
+    --vllm-url "https://imbue--swebench-vllm-pylint-serve.modal.run/v1" \
+    --model-name "pylint-specialist" \
+    --output results/pylint_specialist
+
+# Score with the official SWE-bench harness
+uv run python -m swebench.harness.run_evaluation \
+    --predictions_path results/pylint_specialist/pylint/preds.json \
+    --dataset_name princeton-nlp/SWE-bench_Verified \
+    --run_id pylint_specialist
+```
+
+Results are saved to `results/pylint_specialist/pylint/` — see [Interpreting Results](#interpreting-results) for details.
+
+---
+
 # Installation
 
 Clone the repository locally, and then set up the environment.
